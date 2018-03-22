@@ -1,11 +1,16 @@
 package com.bah.cdh.beer30;
 
 import com.bah.cdh.beer30.dtos.Beer30;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.awt.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.Executors;
@@ -13,7 +18,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class Scheduler {
-    private static final Logger log = LoggerFactory.getLogger(javafx.application.Application.class);
 
     public void run() {
 
@@ -30,12 +34,42 @@ public class Scheduler {
             System.exit(2);
         }
 
-        RestTemplate restTemplate = new RestTemplate();
 
         final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
         scheduler.scheduleAtFixedRate(() -> {
-            Beer30 beer30 = restTemplate.getForObject("https://beer30.charlestondigitalhub.com/lights/beer30.json", Beer30.class);
-            setTrayIconFromBeer30State(trayIcon, beer30);
+            String responseMessage = null;
+
+            try {
+                URL url = new URL("https://beer30.charlestondigitalhub.com/lights/beer30.json");
+                HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                con.setRequestMethod("GET");
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(con.getInputStream()));
+                String inputLine;
+                StringBuffer content = new StringBuffer();
+                while ((inputLine = in.readLine()) != null) {
+                    content.append(inputLine);
+                }
+                in.close();
+                con.disconnect();
+                responseMessage = content.toString();
+
+            } catch (ProtocolException e) {
+                e.printStackTrace();
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            try {
+                Beer30 beer30 = objectMapper.readValue(responseMessage, Beer30.class);
+                setTrayIconFromBeer30State(trayIcon, beer30);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }, 0, 60, TimeUnit.SECONDS);
     }
 
@@ -48,10 +82,7 @@ public class Scheduler {
 
             PopupMenu popup = new PopupMenu();
             MenuItem defaultItem = new MenuItem("Quit");
-            defaultItem.addActionListener((ActionEvent) -> {
-                log.info("quitting");
-                System.exit(0);
-            });
+            defaultItem.addActionListener((ActionEvent) -> System.exit(0));
             popup.add(defaultItem);
 
             trayIcon = new TrayIcon(image, "Beer 30", popup);
@@ -61,7 +92,6 @@ public class Scheduler {
                 System.err.println(e);
             }
         } else {
-            log.error("SystemTray is not supported");
             System.exit(3);
         }
 
@@ -71,7 +101,7 @@ public class Scheduler {
     private void setTrayIconFromBeer30State(TrayIcon trayIcon, Beer30 beer30) {
         Image image;
 
-        switch (beer30.getState()){
+        switch (beer30.getState()) {
             case "red":
                 image = Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/Red_pog.png"));
                 break;
@@ -86,7 +116,7 @@ public class Scheduler {
                 break;
         }
         trayIcon.setImage(image);
-        trayIcon.setToolTip(beer30.getText());
+        trayIcon.setToolTip(beer30.getText() + "\n" + beer30.getUpdated_at());
     }
 
 }

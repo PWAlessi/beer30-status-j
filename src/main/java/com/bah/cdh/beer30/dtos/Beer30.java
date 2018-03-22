@@ -16,5 +16,5 @@ public class Beer30 {
     private String name;
     private String state;
     private String text;
-    private Date updatedAt;
+    private Date updated_at;
 }
